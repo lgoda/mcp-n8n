@@ -301,15 +301,16 @@ export const registerWorkflowTools = (
     async (input) => listWorkflowsHandler(input, deps)
   );
 
-  server.registerTool(
-    "get_workflow",
-    {
-      title: "Get Workflow",
-      description: "Get one n8n workflow by ID with cleaned fields.",
-      inputSchema: getWorkflowInputSchema
-    },
-    async (input) => getWorkflowHandler(input, deps)
-  );
+    server.registerTool(
+      "get_workflow",
+      {
+        title: "Get Workflow",
+        description:
+          "Get one n8n workflow by ID with cleaned fields. Use this before update operations when node details are needed.",
+        inputSchema: getWorkflowInputSchema
+      },
+      async (input) => getWorkflowHandler(input, deps)
+    );
 
   if (enableWriteTools) {
     server.registerTool(
@@ -326,7 +327,8 @@ export const registerWorkflowTools = (
       "update_workflow",
       {
         title: "Update Workflow",
-        description: "Safely update selected workflow fields using controlled merge.",
+        description:
+          "Safely update top-level workflow fields using controlled merge. Prefer update_workflow_node_parameter for single-node parameter edits.",
         inputSchema: updateWorkflowInputSchema
       },
       async (input) => updateWorkflowHandler(input, deps)
@@ -337,7 +339,7 @@ export const registerWorkflowTools = (
       {
         title: "Update Workflow Node Parameter",
         description:
-          "Update one parameter path inside one workflow node by name without requiring full node payload.",
+          "Preferred tool for single-node parameter edits. Use this for requests like changing wait amount, delay, limits, or flags on one node, without sending full nodes array.",
         inputSchema: updateWorkflowNodeParameterInputSchema
       },
       async (input) => updateWorkflowNodeParameterHandler(input, deps)
