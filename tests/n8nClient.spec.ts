@@ -57,6 +57,7 @@ describe("N8nClient", () => {
         get,
         post: vi.fn(),
         patch: vi.fn(),
+        put: vi.fn(),
         defaults: {}
       }
     });
@@ -89,6 +90,7 @@ describe("N8nClient", () => {
         get: vi.fn(),
         post,
         patch: vi.fn(),
+        put: vi.fn(),
         defaults: {}
       }
     });
@@ -110,6 +112,7 @@ describe("N8nClient", () => {
         get,
         post: vi.fn(),
         patch: vi.fn(),
+        put: vi.fn(),
         defaults: {}
       }
     });
@@ -130,6 +133,7 @@ describe("N8nClient", () => {
         get,
         post: vi.fn(),
         patch: vi.fn(),
+        put: vi.fn(),
         defaults: {}
       }
     });
@@ -143,5 +147,37 @@ describe("N8nClient", () => {
       expect(appError.code).toBe("UPSTREAM_ERROR");
       expect(appError.statusCode).toBe(502);
     }
+  });
+
+  it("falls back to PUT when PATCH update returns 405", async () => {
+    const patch = vi.fn().mockRejectedValue(createAxiosError(405, { message: "PATCH method not allowed" }));
+    const put = vi.fn().mockResolvedValue({
+      data: {
+        id: "wf_1",
+        name: "WF updated",
+        active: false,
+        nodes: [],
+        connections: {}
+      }
+    });
+
+    const client = new N8nClient({
+      baseUrl: "https://n8n.example.com",
+      apiKey: "key",
+      logger,
+      httpClient: {
+        get: vi.fn(),
+        post: vi.fn(),
+        patch,
+        put,
+        defaults: {}
+      }
+    });
+
+    const result = await client.updateWorkflow("wf_1", { name: "WF updated" });
+
+    expect(patch).toHaveBeenCalledWith("/api/v1/workflows/wf_1", { name: "WF updated" });
+    expect(put).toHaveBeenCalledWith("/api/v1/workflows/wf_1", { name: "WF updated" });
+    expect(result.name).toBe("WF updated");
   });
 });

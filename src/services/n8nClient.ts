@@ -17,7 +17,7 @@ interface N8nClientOptions {
   baseUrl: string;
   apiKey: string;
   logger: Logger;
-  httpClient?: Pick<AxiosInstance, "get" | "post" | "patch" | "defaults">;
+  httpClient?: Pick<AxiosInstance, "get" | "post" | "patch" | "put" | "defaults">;
 }
 
 const asId = (value: unknown): string => String(value);
@@ -83,7 +83,7 @@ export const buildN8nAxiosClient = (baseUrl: string, apiKey: string): AxiosInsta
 };
 
 export class N8nClient {
-  private readonly httpClient: Pick<AxiosInstance, "get" | "post" | "patch" | "defaults">;
+  private readonly httpClient: Pick<AxiosInstance, "get" | "post" | "patch" | "put" | "defaults">;
 
   private readonly logger: Logger;
 
@@ -125,12 +125,26 @@ export class N8nClient {
   }
 
   public async updateWorkflow(workflowId: string, payload: WorkflowUpdatePatch): Promise<WorkflowDetail> {
-    const data = await this.request<Record<string, unknown>>(
-      () => this.httpClient.patch(`/api/v1/workflows/${encodeURIComponent(workflowId)}`, payload),
-      "update workflow"
-    );
-
-    return normalizeWorkflow(data);
+    const endpoint = `/api/v1/workflows/${encodeURIComponent(workflowId)}`;
+    try {
+      const data = await this.request<Record<string, unknown>>(
+        () => this.httpClient.patch(endpoint, payload),
+        "update workflow"
+      );
+      return normalizeWorkflow(data);
+    } catch (error) {
+      if (error instanceof AppError && error.code === "UPSTREAM_ERROR" && error.statusCode === 405) {
+        this.logger.warn("PATCH not allowed for workflow update, retrying with PUT", {
+          workflowId
+        });
+        const fallbackData = await this.request<Record<string, unknown>>(
+          () => this.httpClient.put(endpoint, payload),
+          "update workflow (put fallback)"
+        );
+        return normalizeWorkflow(fallbackData);
+      }
+      throw error;
+    }
   }
 
   public async activateWorkflow(workflowId: string): Promise<WorkflowDetail> {
