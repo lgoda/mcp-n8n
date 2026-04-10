@@ -134,6 +134,64 @@ describe("tool handlers", () => {
     expect(result.isError).toBeUndefined();
   });
 
+  it("rejects partial nodes replacement in update_workflow", async () => {
+    const getWorkflow = vi.fn().mockResolvedValue({
+      id: "wf_1",
+      name: "Base",
+      active: false,
+      nodes: [
+        {
+          id: "node_a",
+          name: "Start",
+          type: "n8n-nodes-base.manualTrigger",
+          position: [0, 0],
+          parameters: {}
+        },
+        {
+          id: "node_b",
+          name: "Pausa 2s",
+          type: "n8n-nodes-base.wait",
+          position: [100, 100],
+          parameters: { amount: 2 }
+        }
+      ],
+      connections: {},
+      settings: { executionOrder: "v1" }
+    });
+
+    const updateWorkflow = vi.fn();
+
+    const result = await updateWorkflowHandler(
+      {
+        workflowId: "wf_1",
+        nodes: [
+          {
+            id: "node_b",
+            name: "Pausa 2s",
+            type: "n8n-nodes-base.wait",
+            position: [100, 100],
+            parameters: { amount: 60 }
+          }
+        ]
+      },
+      {
+        n8nClient: {
+          getWorkflow,
+          updateWorkflow
+        }
+      } as never
+    );
+
+    expect(updateWorkflow).not.toHaveBeenCalled();
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      error: {
+        code: "VALIDATION_ERROR",
+        statusCode: 400
+      }
+    });
+  });
+
   it("returns validation error for invalid get_workflow input", async () => {
     const result = await getWorkflowHandler({}, { n8nClient: {} } as never);
 

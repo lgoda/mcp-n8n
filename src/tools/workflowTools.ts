@@ -188,6 +188,27 @@ export const updateWorkflowHandler = async (
     const parsedInput = updateWorkflowInputSchema.parse(input);
     const existing = await deps.n8nClient.getWorkflow(parsedInput.workflowId);
 
+    if (parsedInput.nodes !== undefined) {
+      const existingNodeKeys = new Set(
+        existing.nodes.map((node) => (typeof node.id === "string" && node.id.length > 0 ? node.id : node.name))
+      );
+      const incomingNodeKeys = new Set(
+        parsedInput.nodes.map((node) => (typeof node.id === "string" && node.id.length > 0 ? node.id : node.name))
+      );
+      const missingNodeKeys = Array.from(existingNodeKeys).filter((key) => !incomingNodeKeys.has(key));
+
+      if (missingNodeKeys.length > 0) {
+        throw new AppError(
+          "VALIDATION_ERROR",
+          "Refusing partial nodes replacement. Use update_workflow_node_parameter for single-node edits, or send the full nodes array.",
+          400,
+          {
+            missingNodes: missingNodeKeys.slice(0, 20)
+          }
+        );
+      }
+    }
+
     const mergedPayload = mergeWorkflowUpdate(existing, {
       name: parsedInput.name,
       nodes: parsedInput.nodes,
