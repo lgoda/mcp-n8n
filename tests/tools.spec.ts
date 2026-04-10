@@ -4,6 +4,7 @@ import {
   createWorkflowHandler,
   getWorkflowHandler,
   listWorkflowsHandler,
+  updateWorkflowNodeParameterHandler,
   updateWorkflowHandler
 } from "../src/tools/workflowTools.js";
 import { getExecutionHandler, listExecutionsHandler } from "../src/tools/executionTools.js";
@@ -175,5 +176,101 @@ describe("tool handlers", () => {
 
     expect(listResult.isError).toBeUndefined();
     expect(getResult.isError).toBeUndefined();
+  });
+
+  it("updates one workflow node parameter without full node payload", async () => {
+    const getWorkflow = vi.fn().mockResolvedValue({
+      id: "wf_1",
+      name: "Campaign Flow",
+      active: false,
+      nodes: [
+        {
+          name: "Pausa 2s",
+          type: "n8n-nodes-base.wait",
+          position: [0, 0],
+          parameters: { amount: 2, unit: "seconds" }
+        }
+      ],
+      connections: {},
+      settings: {}
+    });
+
+    const updateWorkflow = vi.fn().mockResolvedValue({
+      id: "wf_1",
+      name: "Campaign Flow",
+      active: false,
+      nodes: [],
+      connections: {},
+      settings: {}
+    });
+
+    const result = await updateWorkflowNodeParameterHandler(
+      {
+        workflowId: "wf_1",
+        nodeName: "Pausa 2s",
+        parameterPath: "amount",
+        value: 60
+      },
+      {
+        n8nClient: {
+          getWorkflow,
+          updateWorkflow
+        }
+      } as never
+    );
+
+    expect(updateWorkflow).toHaveBeenCalledWith(
+      "wf_1",
+      expect.objectContaining({
+        nodes: [
+          expect.objectContaining({
+            name: "Pausa 2s",
+            parameters: expect.objectContaining({
+              amount: 60,
+              unit: "seconds"
+            })
+          })
+        ]
+      })
+    );
+    expect(result.structuredContent).toEqual({
+      workflowId: "wf_1",
+      nodeName: "Pausa 2s",
+      parameterPath: "amount",
+      value: 60,
+      updated: true
+    });
+  });
+
+  it("returns NOT_FOUND when node is missing in update_workflow_node_parameter", async () => {
+    const result = await updateWorkflowNodeParameterHandler(
+      {
+        workflowId: "wf_1",
+        nodeName: "Missing Node",
+        parameterPath: "amount",
+        value: 60
+      },
+      {
+        n8nClient: {
+          getWorkflow: vi.fn().mockResolvedValue({
+            id: "wf_1",
+            name: "Campaign Flow",
+            active: false,
+            nodes: [],
+            connections: {},
+            settings: {}
+          }),
+          updateWorkflow: vi.fn()
+        }
+      } as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      error: {
+        code: "NOT_FOUND",
+        statusCode: 404
+      }
+    });
   });
 });

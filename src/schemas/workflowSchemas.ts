@@ -83,6 +83,23 @@ export const updateWorkflowInputSchema = z
 
 export const updateWorkflowOutputSchema = workflowDetailSchema;
 
+export const workflowParameterValueSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+
+export const updateWorkflowNodeParameterInputSchema = z.object({
+  workflowId: idSchema,
+  nodeName: z.string().min(1),
+  parameterPath: z.string().min(1),
+  value: workflowParameterValueSchema
+});
+
+export const updateWorkflowNodeParameterOutputSchema = z.object({
+  workflowId: z.string(),
+  nodeName: z.string(),
+  parameterPath: z.string(),
+  value: workflowParameterValueSchema,
+  updated: z.literal(true)
+});
+
 export const activateWorkflowInputSchema = z.object({
   workflowId: idSchema
 });

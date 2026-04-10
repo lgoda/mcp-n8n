@@ -3,6 +3,7 @@
 import {
   createWorkflowInputSchema,
   listWorkflowsInputSchema,
+  updateWorkflowNodeParameterInputSchema,
   updateWorkflowInputSchema
 } from "../src/schemas/workflowSchemas.js";
 import { getExecutionInputSchema, listExecutionsInputSchema } from "../src/schemas/executionSchemas.js";
@@ -41,5 +42,16 @@ describe("schema validation", () => {
     const result = listExecutionsInputSchema.safeParse({ status: "queued" });
 
     expect(result.success).toBe(false);
+  });
+
+  it("accepts update_workflow_node_parameter input", () => {
+    const parsed = updateWorkflowNodeParameterInputSchema.parse({
+      workflowId: "wf_1",
+      nodeName: "Pausa 2s",
+      parameterPath: "amount",
+      value: 60
+    });
+
+    expect(parsed.value).toBe(60);
   });
 });
