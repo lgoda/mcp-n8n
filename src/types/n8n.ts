@@ -2,7 +2,7 @@
   id?: string;
   name: string;
   type: string;
-  position: [number, number];
+  position: number[];
   parameters: Record<string, unknown>;
   [key: string]: unknown;
 }

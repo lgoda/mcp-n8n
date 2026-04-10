@@ -7,7 +7,9 @@ export const workflowNodeSchema = z
     id: z.string().optional(),
     name: z.string().min(1),
     type: z.string().min(1),
-    position: z.tuple([z.number(), z.number()]),
+    // OpenAI/ChatGPT tool schema compatibility: avoid tuple JSON schema.
+    // Keep n8n shape as array with exactly 2 numeric values [x, y].
+    position: z.array(z.number()).length(2),
     parameters: z.record(z.unknown())
   })
   .passthrough();
