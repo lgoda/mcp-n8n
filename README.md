@@ -18,7 +18,7 @@ Server MCP remoto production-oriented per leggere e modificare workflow n8n via 
 - `GET /api/v1/workflows`
 - `GET /api/v1/workflows/:id`
 - `POST /api/v1/workflows`
-- `PATCH /api/v1/workflows/:id`
+- `PATCH /api/v1/workflows/:id` (con fallback automatico a `PUT` su `405`)
 - `POST /api/v1/workflows/:id/activate`
 - `POST /api/v1/workflows/:id/deactivate`
 - `GET /api/v1/executions`
@@ -27,12 +27,38 @@ Server MCP remoto production-oriented per leggere e modificare workflow n8n via 
 ## Tool MCP esposti
 - `list_workflows`
 - `get_workflow`
+- `get_workflow_node`
 - `create_workflow`
+- `clone_workflow`
+- `validate_workflow`
 - `update_workflow`
+- `update_workflow_node_parameter`
 - `activate_workflow`
 - `deactivate_workflow`
 - `list_executions`
 - `get_execution`
+- `get_execution_node_data`
+
+## Guida rapida per ChatGPT/LLM
+- Per cambiare un solo parametro di un nodo usa sempre `update_workflow_node_parameter`.
+- Usa `update_workflow` solo quando vuoi sostituire esplicitamente sezioni intere del workflow.
+- Flusso consigliato per modifiche sicure:
+  1. `get_workflow` o `get_workflow_node`
+  2. `update_workflow_node_parameter`
+  3. `get_workflow_node` per verifica finale
+- Per debug esecuzioni:
+  1. `list_executions`
+  2. `get_execution`
+  3. `get_execution_node_data` (errore/input/output del nodo)
+
+## Regole importanti di update
+- `update_workflow`:
+  - se passi `nodes`, devi passare l'array completo dei nodi (no replace parziale);
+  - per modifiche incrementali usa `update_workflow_node_parameter`;
+  - se il workflow e' attivo, devi impostare `allowActiveWorkflowUpdate: true` oppure `deactivateBeforeUpdate: true`.
+- `update_workflow_node_parameter`:
+  - usa `nodeNameOrId` + `parameterPath` + `value`;
+  - e' il tool consigliato per modifiche puntuali (es. `amount` da `2` a `60`).
 
 ## Sicurezza
 - Validazione input/output con `zod`.
@@ -40,9 +66,10 @@ Server MCP remoto production-oriented per leggere e modificare workflow n8n via 
 - Errori sanitizzati (no leak API key/token).
 - Nessun tool catch-all/raw pass-through.
 - Separazione read/write e flag `enableWriteTools` nel bootstrap.
-- TODO chiari in codice per:
-  - Middleware OAuth/auth applicativa.
-  - Policy autorizzativa su write actions.
+- Errori MCP normalizzati con campi utili all'agente:
+  - `errorType`
+  - `hint`
+  - `availableTools`
 
 ## Struttura progetto
 ```text
@@ -122,12 +149,13 @@ npm run test
 ```
 
 ## Esempi chiamata MCP (JSON-RPC)
-Nota: in ambiente reale, il client MCP (ChatGPT/OpenAI) gestisce handshake e call sequence. Di seguito esempi minimali HTTP.
+Nota: per `POST /mcp` il client deve inviare `Accept: application/json, text/event-stream`.
 
 Initialize:
 ```bash
 curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,
@@ -140,17 +168,55 @@ curl -X POST http://localhost:3000/mcp \
   }'
 ```
 
-Tool call (`list_workflows`):
+List tools:
 ```bash
 curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
   -d '{
     "jsonrpc": "2.0",
     "id": 2,
+    "method": "tools/list",
+    "params": {}
+  }'
+```
+
+Tool call (`update_workflow_node_parameter`):
+```bash
+curl -X POST http://localhost:3000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 3,
     "method": "tools/call",
     "params": {
-      "name": "list_workflows",
-      "arguments": { "limit": 20, "active": true }
+      "name": "update_workflow_node_parameter",
+      "arguments": {
+        "workflowId": "wf_123",
+        "nodeNameOrId": "Pausa 2s",
+        "parameterPath": "amount",
+        "value": 60
+      }
+    }
+  }'
+```
+
+Tool call (`get_execution_node_data`):
+```bash
+curl -X POST http://localhost:3000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 4,
+    "method": "tools/call",
+    "params": {
+      "name": "get_execution_node_data",
+      "arguments": {
+        "executionId": "exec_123",
+        "nodeName": "HTTP Request"
+      }
     }
   }'
 ```
@@ -174,7 +240,8 @@ docker compose up --build
 - Esponi porta `PORT`.
 - Verifica `GET /health` dopo il deploy.
 
-## Note compatibilità
+## Note compatibilita MCP
 - Transport MCP: Streamable HTTP stateless.
 - Endpoint MCP principale: `POST /mcp`.
 - `GET /mcp` e `DELETE /mcp` rispondono `405` in questa implementazione.
+- Header richiesto su `POST /mcp`: `Accept: application/json, text/event-stream`.

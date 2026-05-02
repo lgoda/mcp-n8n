@@ -2,11 +2,16 @@
 
 import {
   createWorkflowInputSchema,
+  getWorkflowNodeInputSchema,
   listWorkflowsInputSchema,
   updateWorkflowNodeParameterInputSchema,
   updateWorkflowInputSchema
 } from "../src/schemas/workflowSchemas.js";
-import { getExecutionInputSchema, listExecutionsInputSchema } from "../src/schemas/executionSchemas.js";
+import {
+  getExecutionInputSchema,
+  getExecutionNodeDataInputSchema,
+  listExecutionsInputSchema
+} from "../src/schemas/executionSchemas.js";
 
 describe("schema validation", () => {
   it("accepts valid list_workflows input", () => {
@@ -47,11 +52,29 @@ describe("schema validation", () => {
   it("accepts update_workflow_node_parameter input", () => {
     const parsed = updateWorkflowNodeParameterInputSchema.parse({
       workflowId: "wf_1",
-      nodeName: "Pausa 2s",
+      nodeNameOrId: "Pausa 2s",
       parameterPath: "amount",
       value: 60
     });
 
     expect(parsed.value).toBe(60);
+  });
+
+  it("accepts get_workflow_node input", () => {
+    const parsed = getWorkflowNodeInputSchema.parse({
+      workflowId: "wf_1",
+      nodeNameOrId: "node_1"
+    });
+
+    expect(parsed.nodeNameOrId).toBe("node_1");
+  });
+
+  it("accepts get_execution_node_data input", () => {
+    const parsed = getExecutionNodeDataInputSchema.parse({
+      executionId: "exec_1",
+      nodeName: "HTTP Request"
+    });
+
+    expect(parsed.nodeName).toBe("HTTP Request");
   });
 });

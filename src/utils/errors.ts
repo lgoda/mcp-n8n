@@ -13,6 +13,9 @@ export interface PublicError {
   code: ErrorCode;
   message: string;
   statusCode: number;
+  errorType?: string;
+  hint?: string;
+  availableTools?: string[];
   details?: Record<string, unknown>;
 }
 
@@ -62,10 +65,19 @@ export const toPublicError = (error: unknown): PublicError => {
   }
 
   if (error instanceof AppError) {
+    const errorType = typeof error.details?.errorType === "string" ? error.details.errorType : undefined;
+    const hint = typeof error.details?.hint === "string" ? error.details.hint : undefined;
+    const availableTools = Array.isArray(error.details?.availableTools)
+      ? (error.details.availableTools.filter((item) => typeof item === "string") as string[])
+      : undefined;
+
     return {
       code: error.code,
       message: sanitizeErrorMessage(error.message),
       statusCode: error.statusCode,
+      errorType,
+      hint,
+      availableTools,
       details: error.details
     };
   }

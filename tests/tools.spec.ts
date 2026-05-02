@@ -1,13 +1,21 @@
 ﻿import { describe, expect, it, vi } from "vitest";
 
 import {
+  cloneWorkflowHandler,
   createWorkflowHandler,
+  deactivateWorkflowHandler,
   getWorkflowHandler,
+  getWorkflowNodeHandler,
   listWorkflowsHandler,
   updateWorkflowNodeParameterHandler,
-  updateWorkflowHandler
+  updateWorkflowHandler,
+  validateWorkflowHandler
 } from "../src/tools/workflowTools.js";
-import { getExecutionHandler, listExecutionsHandler } from "../src/tools/executionTools.js";
+import {
+  getExecutionHandler,
+  getExecutionNodeDataHandler,
+  listExecutionsHandler
+} from "../src/tools/executionTools.js";
 
 describe("tool handlers", () => {
   it("returns simplified workflow list output", async () => {
@@ -43,6 +51,43 @@ describe("tool handlers", () => {
     });
   });
 
+  it("returns one workflow node by id or name", async () => {
+    const n8nClient = {
+      getWorkflow: vi.fn().mockResolvedValue({
+        id: "wf_1",
+        name: "Workflow 1",
+        active: true,
+        nodes: [
+          {
+            id: "node_wait",
+            name: "Pausa 2s",
+            type: "n8n-nodes-base.wait",
+            position: [100, 100],
+            parameters: { amount: 2 }
+          }
+        ],
+        connections: {}
+      })
+    };
+
+    const result = await getWorkflowNodeHandler(
+      {
+        workflowId: "wf_1",
+        nodeNameOrId: "node_wait"
+      },
+      { n8nClient } as never
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({
+      workflowId: "wf_1",
+      node: {
+        id: "node_wait",
+        name: "Pausa 2s"
+      }
+    });
+  });
+
   it("creates workflow and returns compact output", async () => {
     const n8nClient = {
       createWorkflow: vi.fn().mockResolvedValue({
@@ -68,6 +113,42 @@ describe("tool handlers", () => {
       name: "Created",
       active: false,
       created: true
+    });
+  });
+
+  it("clones a workflow safely as inactive by default", async () => {
+    const n8nClient = {
+      getWorkflow: vi.fn().mockResolvedValue({
+        id: "wf_source",
+        name: "Source",
+        active: true,
+        nodes: [],
+        connections: {},
+        settings: {}
+      }),
+      createWorkflow: vi.fn().mockResolvedValue({
+        id: "wf_clone",
+        name: "Clone",
+        active: false,
+        updatedAt: "2026-05-01T10:00:00.000Z",
+        nodes: [],
+        connections: {}
+      })
+    };
+
+    const result = await cloneWorkflowHandler(
+      {
+        sourceWorkflowId: "wf_source",
+        newName: "Clone"
+      },
+      { n8nClient } as never
+    );
+
+    expect(result.structuredContent).toMatchObject({
+      sourceWorkflowId: "wf_source",
+      id: "wf_clone",
+      active: false,
+      cloned: true
     });
   });
 
@@ -134,6 +215,38 @@ describe("tool handlers", () => {
     expect(result.isError).toBeUndefined();
   });
 
+  it("blocks active workflow update without explicit flag", async () => {
+    const getWorkflow = vi.fn().mockResolvedValue({
+      id: "wf_1",
+      name: "Active WF",
+      active: true,
+      nodes: [],
+      connections: {},
+      settings: {}
+    });
+
+    const result = await updateWorkflowHandler(
+      {
+        workflowId: "wf_1",
+        name: "Updated Name"
+      },
+      {
+        n8nClient: {
+          getWorkflow,
+          updateWorkflow: vi.fn(),
+          deactivateWorkflow: vi.fn()
+        }
+      } as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      error: {
+        errorType: "ACTIVE_WORKFLOW_UPDATE_BLOCKED"
+      }
+    });
+  });
+
   it("rejects partial nodes replacement in update_workflow", async () => {
     const getWorkflow = vi.fn().mockResolvedValue({
       id: "wf_1",
@@ -186,54 +299,10 @@ describe("tool handlers", () => {
     expect(result.isError).toBe(true);
     expect(result.structuredContent).toMatchObject({
       error: {
-        code: "VALIDATION_ERROR",
+        errorType: "PARTIAL_NODE_UPDATE_NOT_ALLOWED",
         statusCode: 400
       }
     });
-  });
-
-  it("returns validation error for invalid get_workflow input", async () => {
-    const result = await getWorkflowHandler({}, { n8nClient: {} } as never);
-
-    expect(result.isError).toBe(true);
-    expect(result.structuredContent).toMatchObject({
-      error: {
-        code: "VALIDATION_ERROR",
-        statusCode: 400
-      }
-    });
-  });
-
-  it("returns execution list and details", async () => {
-    const n8nClient = {
-      listExecutions: vi.fn().mockResolvedValue({
-        data: [
-          {
-            id: "exec_1",
-            workflowId: "wf_1",
-            workflowName: "WF",
-            status: "success",
-            mode: "manual",
-            startedAt: "2026-04-10T10:00:00.000Z",
-            stoppedAt: "2026-04-10T10:00:01.000Z"
-          }
-        ],
-        nextCursor: null
-      }),
-      getExecution: vi.fn().mockResolvedValue({
-        id: "exec_1",
-        workflowId: "wf_1",
-        status: "success",
-        mode: "manual",
-        data: { resultData: {} }
-      })
-    };
-
-    const listResult = await listExecutionsHandler({}, { n8nClient } as never);
-    const getResult = await getExecutionHandler({ executionId: "exec_1" }, { n8nClient } as never);
-
-    expect(listResult.isError).toBeUndefined();
-    expect(getResult.isError).toBeUndefined();
   });
 
   it("updates one workflow node parameter without full node payload", async () => {
@@ -243,6 +312,7 @@ describe("tool handlers", () => {
       active: false,
       nodes: [
         {
+          id: "node_wait",
           name: "Pausa 2s",
           type: "n8n-nodes-base.wait",
           position: [0, 0],
@@ -257,6 +327,7 @@ describe("tool handlers", () => {
       id: "wf_1",
       name: "Campaign Flow",
       active: false,
+      updatedAt: "2026-05-02T12:00:00.000Z",
       nodes: [],
       connections: {},
       settings: {}
@@ -265,7 +336,7 @@ describe("tool handlers", () => {
     const result = await updateWorkflowNodeParameterHandler(
       {
         workflowId: "wf_1",
-        nodeName: "Pausa 2s",
+        nodeNameOrId: "node_wait",
         parameterPath: "amount",
         value: 60
       },
@@ -293,10 +364,13 @@ describe("tool handlers", () => {
     );
     expect(result.structuredContent).toEqual({
       workflowId: "wf_1",
+      nodeId: "node_wait",
       nodeName: "Pausa 2s",
       parameterPath: "amount",
       value: 60,
-      updated: true
+      updated: true,
+      active: false,
+      updatedAt: "2026-05-02T12:00:00.000Z"
     });
   });
 
@@ -304,7 +378,7 @@ describe("tool handlers", () => {
     const result = await updateWorkflowNodeParameterHandler(
       {
         workflowId: "wf_1",
-        nodeName: "Missing Node",
+        nodeNameOrId: "Missing Node",
         parameterPath: "amount",
         value: 60
       },
@@ -326,9 +400,118 @@ describe("tool handlers", () => {
     expect(result.isError).toBe(true);
     expect(result.structuredContent).toMatchObject({
       error: {
-        code: "NOT_FOUND",
+        errorType: "WORKFLOW_NODE_NOT_FOUND",
         statusCode: 404
       }
+    });
+  });
+
+  it("returns activation/deactivation confirmation payload", async () => {
+    const n8nClient = {
+      deactivateWorkflow: vi.fn().mockResolvedValue({
+        id: "wf_1",
+        name: "WF 1",
+        active: false,
+        updatedAt: "2026-05-02T12:20:00.000Z",
+        nodes: [],
+        connections: {}
+      })
+    };
+
+    const result = await deactivateWorkflowHandler({ workflowId: "wf_1" }, { n8nClient } as never);
+
+    expect(result.structuredContent).toEqual({
+      id: "wf_1",
+      name: "WF 1",
+      active: false,
+      updatedAt: "2026-05-02T12:20:00.000Z",
+      message: "Workflow deactivated"
+    });
+  });
+
+  it("returns validate_workflow warnings", async () => {
+    const result = await validateWorkflowHandler({
+      nodes: [
+        {
+          name: "Schedule Trigger",
+          type: "n8n-nodes-base.scheduleTrigger",
+          position: [0, 0],
+          parameters: {}
+        },
+        {
+          name: "HTTP Request",
+          type: "n8n-nodes-base.httpRequest",
+          position: [100, 100],
+          parameters: {
+            authentication: "headerAuth",
+            jsonBody: "{ invalid-json"
+          }
+        }
+      ],
+      connections: {}
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({
+      valid: true
+    });
+    expect((result.structuredContent as { warnings: string[] }).warnings.length).toBeGreaterThan(0);
+  });
+
+  it("returns execution list and details", async () => {
+    const n8nClient = {
+      listExecutions: vi.fn().mockResolvedValue({
+        data: [
+          {
+            id: "exec_1",
+            workflowId: "wf_1",
+            workflowName: "WF",
+            status: "success",
+            mode: "manual",
+            startedAt: "2026-04-10T10:00:00.000Z",
+            stoppedAt: "2026-04-10T10:00:01.000Z"
+          }
+        ],
+        nextCursor: null
+      }),
+      getExecution: vi.fn().mockResolvedValue({
+        id: "exec_1",
+        workflowId: "wf_1",
+        status: "success",
+        mode: "manual",
+        data: {
+          resultData: {
+            runData: {
+              "HTTP Request": [
+                {
+                  source: [{ previousNode: "Start" }],
+                  data: {
+                    main: [[{ json: { ok: false } }]]
+                  },
+                  error: {
+                    message: "422 email must be an email"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      })
+    };
+
+    const listResult = await listExecutionsHandler({}, { n8nClient } as never);
+    const getResult = await getExecutionHandler({ executionId: "exec_1" }, { n8nClient } as never);
+    const nodeDataResult = await getExecutionNodeDataHandler(
+      { executionId: "exec_1", nodeName: "HTTP Request" },
+      { n8nClient } as never
+    );
+
+    expect(listResult.isError).toBeUndefined();
+    expect(getResult.isError).toBeUndefined();
+    expect(nodeDataResult.structuredContent).toMatchObject({
+      executionId: "exec_1",
+      nodeName: "HTTP Request",
+      hasAnyError: true
     });
   });
 });

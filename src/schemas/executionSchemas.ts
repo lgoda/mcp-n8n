@@ -41,3 +41,23 @@ export const getExecutionInputSchema = z.object({
 });
 
 export const getExecutionOutputSchema = executionDetailSchema;
+
+export const getExecutionNodeDataInputSchema = z.object({
+  executionId: idSchema,
+  nodeName: z.string().min(1)
+});
+
+export const executionNodeRunSchema = z.object({
+  runIndex: z.number().int().nonnegative(),
+  hasError: z.boolean(),
+  errorMessage: z.string().optional(),
+  input: z.unknown().optional(),
+  output: z.unknown().optional()
+});
+
+export const getExecutionNodeDataOutputSchema = z.object({
+  executionId: z.string(),
+  nodeName: z.string(),
+  runs: z.array(executionNodeRunSchema),
+  hasAnyError: z.boolean()
+});
