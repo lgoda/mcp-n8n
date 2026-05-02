@@ -51,7 +51,8 @@ export const createApp = (options?: CreateAppOptions): Express => {
     });
   });
 
-  app.post("/mcp", async (req: Request, res: Response) => {
+  app.all("/mcp", async (req: Request, res: Response) => {
+    const startedAt = Date.now();
     const mcpServer = buildMcpServer(serverConfig, options?.enableWriteTools ?? true);
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
@@ -64,6 +65,7 @@ export const createApp = (options?: CreateAppOptions): Express => {
     } catch (error) {
       const publicError = toPublicError(error);
       logger.error("MCP request failed", {
+        method: req.method,
         code: publicError.code,
         statusCode: publicError.statusCode,
         message: publicError.message
@@ -82,23 +84,12 @@ export const createApp = (options?: CreateAppOptions): Express => {
     } finally {
       await transport.close().catch(() => undefined);
       await mcpServer.close().catch(() => undefined);
+      logger.debug("MCP request completed", {
+        method: req.method,
+        durationMs: Date.now() - startedAt,
+        responseHeadersSent: res.headersSent
+      });
     }
-  });
-
-  app.get("/mcp", (_req: Request, res: Response) => {
-    res.status(405).json({
-      jsonrpc: "2.0",
-      error: { code: -32000, message: "Method not allowed." },
-      id: null
-    });
-  });
-
-  app.delete("/mcp", (_req: Request, res: Response) => {
-    res.status(405).json({
-      jsonrpc: "2.0",
-      error: { code: -32000, message: "Method not allowed." },
-      id: null
-    });
   });
 
   return app;
