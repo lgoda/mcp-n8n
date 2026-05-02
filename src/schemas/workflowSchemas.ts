@@ -89,7 +89,10 @@ export const updateWorkflowInputSchema = z
           )
       )
       .min(1)
-      .optional(),
+      .optional()
+      .describe(
+        "Patch mode for node parameters. Use nodeUpdates[].parameters object. Do not use parameterUpdates[]."
+      ),
     connections: workflowConnectionsSchema.optional(),
     settings: workflowSettingsSchema.optional(),
     allowActiveWorkflowUpdate: z.boolean().optional(),
@@ -116,7 +119,7 @@ export const updateWorkflowNodeParameterInputSchema = z.object({
   workflowId: idSchema,
   nodeNameOrId: nodeSelectorSchema.optional(),
   nodeName: z.string().min(1).optional(),
-  parameterPath: z.string().min(1),
+  parameterPath: z.string().min(1).describe("Path syntax: amount or headerParameters.parameters[0].value"),
   value: workflowParameterValueSchema,
   allowActiveWorkflowUpdate: z.boolean().optional(),
   deactivateBeforeUpdate: z.boolean().optional()
@@ -141,7 +144,9 @@ export const updateWorkflowNodeParametersInputSchema = z.object({
   nodeNameOrId: nodeSelectorSchema.optional(),
   nodeName: z.string().min(1).optional(),
   nodeId: z.string().min(1).optional(),
-  parametersPatch: z.record(jsonValueSchema),
+  parametersPatch: z
+    .record(jsonValueSchema)
+    .describe("Deep patch object merged into node.parameters. Arrays are replaced by provided values."),
   allowActiveWorkflowUpdate: z.boolean().optional(),
   deactivateBeforeUpdate: z.boolean().optional()
 }).refine(

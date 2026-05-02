@@ -763,7 +763,7 @@ export const registerWorkflowTools = (
       {
         title: "Update Workflow",
         description:
-          "Safely update top-level workflow fields using controlled merge. You can use either full 'nodes' replacement (must include all nodes) or 'nodeUpdates' patch mode for targeted node parameter merges. For single-path edits use update_workflow_node_parameter. If workflow is active, set allowActiveWorkflowUpdate=true or deactivateBeforeUpdate=true.",
+          "Safely update workflow with controlled merge. Modes: (1) full nodes replacement with 'nodes' (must include ALL nodes), or (2) targeted patch mode with 'nodeUpdates[].parameters'. IMPORTANT: 'nodeUpdates[].parameterUpdates' is NOT supported. Use update_workflow_node_parameter for single path edits. Active workflow requires allowActiveWorkflowUpdate=true or deactivateBeforeUpdate=true. Example nodeUpdates: {\"workflowId\":\"wf_1\",\"nodeUpdates\":[{\"nodeName\":\"Wait 150ms\",\"parameters\":{\"amount\":150,\"unit\":\"milliseconds\"}}]}",
         inputSchema: updateWorkflowInputSchema
       },
       async (input) => updateWorkflowHandler(input, deps)
@@ -774,7 +774,7 @@ export const registerWorkflowTools = (
       {
         title: "Update Workflow Node Parameter",
         description:
-          "Preferred tool for incremental edits: update a single parameter path on one node by node ID or node name. Safer than update_workflow for small changes.",
+          "Preferred tool for incremental scalar edits: update one parameter path on one node by ID/name. Example: {\"workflowId\":\"wf_1\",\"nodeNameOrId\":\"Pausa 2s\",\"parameterPath\":\"amount\",\"value\":60}. For nested object patches use update_workflow_node_parameters.",
         inputSchema: updateWorkflowNodeParameterInputSchema
       },
       async (input) => updateWorkflowNodeParameterHandler(input, deps)
@@ -785,7 +785,7 @@ export const registerWorkflowTools = (
       {
         title: "Update Workflow Node Parameters",
         description:
-          "Patch-merge multiple parameters on one node by node ID or name. Preferred when you need to update nested objects like headerParameters/jsonBody in one call.",
+          "Patch-merge multiple parameters on one node by ID/name. Use for nested objects like headerParameters/jsonBody. Example: {\"workflowId\":\"wf_1\",\"nodeName\":\"Create GHL Contact\",\"parametersPatch\":{\"headerParameters\":{\"parameters\":[{\"name\":\"Content-Type\",\"value\":\"application/json\"}]},\"jsonBody\":\"={{ {\\\"ok\\\":true} }}\"}}",
         inputSchema: updateWorkflowNodeParametersInputSchema
       },
       async (input) => updateWorkflowNodeParametersHandler(input, deps)
