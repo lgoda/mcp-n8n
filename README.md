@@ -33,6 +33,7 @@ Server MCP remoto production-oriented per leggere e modificare workflow n8n via 
 - `validate_workflow`
 - `update_workflow`
 - `update_workflow_node_parameter`
+- `update_workflow_node_parameters`
 - `activate_workflow`
 - `deactivate_workflow`
 - `list_executions`
@@ -41,6 +42,7 @@ Server MCP remoto production-oriented per leggere e modificare workflow n8n via 
 
 ## Guida rapida per ChatGPT/LLM
 - Per cambiare un solo parametro di un nodo usa sempre `update_workflow_node_parameter`.
+- Per cambiare un blocco di parametri annidati (es. `headerParameters`, `jsonBody`) usa `update_workflow_node_parameters`.
 - Usa `update_workflow` solo quando vuoi sostituire esplicitamente sezioni intere del workflow.
 - Flusso consigliato per modifiche sicure:
   1. `get_workflow` o `get_workflow_node`
@@ -54,11 +56,15 @@ Server MCP remoto production-oriented per leggere e modificare workflow n8n via 
 ## Regole importanti di update
 - `update_workflow`:
   - se passi `nodes`, devi passare l'array completo dei nodi (no replace parziale);
+  - in alternativa puoi usare `nodeUpdates` per patchare in modo mirato i `parameters` dei nodi senza reinviare l'intero array;
   - per modifiche incrementali usa `update_workflow_node_parameter`;
   - se il workflow e' attivo, devi impostare `allowActiveWorkflowUpdate: true` oppure `deactivateBeforeUpdate: true`.
 - `update_workflow_node_parameter`:
   - usa `nodeNameOrId` + `parameterPath` + `value`;
   - e' il tool consigliato per modifiche puntuali (es. `amount` da `2` a `60`).
+- `update_workflow_node_parameters`:
+  - usa `nodeNameOrId`/`nodeName`/`nodeId` + `parametersPatch`;
+  - applica merge profondo sui parametri del nodo (array sostituiti come da patch).
 
 ## Sicurezza
 - Validazione input/output con `zod`.
@@ -202,6 +208,35 @@ curl -X POST http://localhost:3000/mcp \
   }'
 ```
 
+Tool call (`update_workflow_node_parameters`):
+```bash
+curl -X POST http://localhost:3000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "tools/call",
+    "params": {
+      "name": "update_workflow_node_parameters",
+      "arguments": {
+        "workflowId": "wf_123",
+        "nodeName": "Create GHL Contact",
+        "parametersPatch": {
+          "headerParameters": {
+            "parameters": [
+              { "name": "Authorization", "value": "={{ \"Bearer \" + $(\"Loop Contacts\").first().json.ghl.api_token }}" },
+              { "name": "Version", "value": "2021-04-15" },
+              { "name": "Content-Type", "value": "application/json" }
+            ]
+          },
+          "jsonBody": "={{ {\"ok\": true} }}"
+        }
+      }
+    }
+  }'
+```
+
 Tool call (`get_execution_node_data`):
 ```bash
 curl -X POST http://localhost:3000/mcp \
@@ -245,3 +280,7 @@ docker compose up --build
 - Endpoint MCP principale: `POST /mcp`.
 - `GET /mcp` e `DELETE /mcp` rispondono `405` in questa implementazione.
 - Header richiesto su `POST /mcp`: `Accept: application/json, text/event-stream`.
+
+## Policy ChatGPT Connector
+- Policy operativa pronta da incollare nelle istruzioni del connector:
+  - `CHATGPT_CONNECTOR_POLICY.md`

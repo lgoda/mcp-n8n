@@ -8,6 +8,7 @@ import {
   getWorkflowNodeHandler,
   listWorkflowsHandler,
   updateWorkflowNodeParameterHandler,
+  updateWorkflowNodeParametersHandler,
   updateWorkflowHandler,
   validateWorkflowHandler
 } from "../src/tools/workflowTools.js";
@@ -372,6 +373,204 @@ describe("tool handlers", () => {
       active: false,
       updatedAt: "2026-05-02T12:00:00.000Z"
     });
+  });
+
+  it("updates one workflow node with parameters patch", async () => {
+    const getWorkflow = vi.fn().mockResolvedValue({
+      id: "wf_1",
+      name: "Campaign Flow",
+      active: false,
+      nodes: [
+        {
+          id: "node_ghl",
+          name: "Create GHL Contact",
+          type: "n8n-nodes-base.httpRequest",
+          position: [0, 0],
+          parameters: {
+            headerParameters: {
+              parameters: [
+                { name: "Version", value: "2021-04-15" }
+              ]
+            },
+            jsonBody: "={{ { old: true } }}"
+          }
+        }
+      ],
+      connections: {},
+      settings: {}
+    });
+
+    const updateWorkflow = vi.fn().mockResolvedValue({
+      id: "wf_1",
+      name: "Campaign Flow",
+      active: false,
+      updatedAt: "2026-05-02T12:01:00.000Z",
+      nodes: [],
+      connections: {},
+      settings: {}
+    });
+
+    const result = await updateWorkflowNodeParametersHandler(
+      {
+        workflowId: "wf_1",
+        nodeName: "Create GHL Contact",
+        parametersPatch: {
+          headerParameters: {
+            parameters: [
+              { name: "Authorization", value: "={{ 'Bearer ' + $('Loop Contacts').first().json.ghl.api_token }}" },
+              { name: "Version", value: "2021-04-15" },
+              { name: "Content-Type", value: "application/json" }
+            ]
+          },
+          jsonBody: "={{ { updated: true } }}"
+        }
+      },
+      {
+        n8nClient: {
+          getWorkflow,
+          updateWorkflow
+        }
+      } as never
+    );
+
+    expect(updateWorkflow).toHaveBeenCalledWith(
+      "wf_1",
+      expect.objectContaining({
+        nodes: [
+          expect.objectContaining({
+            name: "Create GHL Contact",
+            parameters: expect.objectContaining({
+              jsonBody: "={{ { updated: true } }}",
+              headerParameters: {
+                parameters: [
+                  { name: "Authorization", value: "={{ 'Bearer ' + $('Loop Contacts').first().json.ghl.api_token }}" },
+                  { name: "Version", value: "2021-04-15" },
+                  { name: "Content-Type", value: "application/json" }
+                ]
+              }
+            })
+          })
+        ]
+      })
+    );
+
+    expect(result.structuredContent).toEqual({
+      workflowId: "wf_1",
+      nodeId: "node_ghl",
+      nodeName: "Create GHL Contact",
+      updated: true,
+      changedTopLevelKeys: ["headerParameters", "jsonBody"],
+      active: false,
+      updatedAt: "2026-05-02T12:01:00.000Z"
+    });
+  });
+
+  it("supports update_workflow nodeUpdates patch mode", async () => {
+    const getWorkflow = vi.fn().mockResolvedValue({
+      id: "wf_1",
+      name: "Campaign Flow",
+      active: false,
+      nodes: [
+        {
+          id: "node_ghl",
+          name: "Create GHL Contact",
+          type: "n8n-nodes-base.httpRequest",
+          position: [0, 0],
+          parameters: {
+            headerParameters: {
+              parameters: [{ name: "Version", value: "2021-04-15" }]
+            },
+            jsonBody: "={{ { old: true } }}"
+          }
+        },
+        {
+          id: "node_wait",
+          name: "Pausa 2s",
+          type: "n8n-nodes-base.wait",
+          position: [100, 0],
+          parameters: { amount: 2 }
+        }
+      ],
+      connections: {},
+      settings: {}
+    });
+
+    const updateWorkflow = vi.fn().mockResolvedValue({
+      id: "wf_1",
+      name: "Campaign Flow",
+      active: false,
+      nodes: [
+        {
+          id: "node_ghl",
+          name: "Create GHL Contact",
+          type: "n8n-nodes-base.httpRequest",
+          position: [0, 0],
+          parameters: {
+            headerParameters: {
+              parameters: [
+                { name: "Authorization", value: "Bearer token" },
+                { name: "Version", value: "2021-04-15" }
+              ]
+            },
+            jsonBody: "={{ { updated: true } }}"
+          }
+        },
+        {
+          id: "node_wait",
+          name: "Pausa 2s",
+          type: "n8n-nodes-base.wait",
+          position: [100, 0],
+          parameters: { amount: 2 }
+        }
+      ],
+      connections: {},
+      settings: {}
+    });
+
+    const result = await updateWorkflowHandler(
+      {
+        workflowId: "wf_1",
+        nodeUpdates: [
+          {
+            nodeName: "Create GHL Contact",
+            parameters: {
+              headerParameters: {
+                parameters: [
+                  { name: "Authorization", value: "Bearer token" },
+                  { name: "Version", value: "2021-04-15" }
+                ]
+              },
+              jsonBody: "={{ { updated: true } }}"
+            }
+          }
+        ]
+      },
+      {
+        n8nClient: {
+          getWorkflow,
+          updateWorkflow
+        }
+      } as never
+    );
+
+    expect(updateWorkflow).toHaveBeenCalledWith(
+      "wf_1",
+      expect.objectContaining({
+        nodes: [
+          expect.objectContaining({
+            name: "Create GHL Contact",
+            parameters: expect.objectContaining({
+              jsonBody: "={{ { updated: true } }}"
+            })
+          }),
+          expect.objectContaining({
+            name: "Pausa 2s",
+            parameters: { amount: 2 }
+          })
+        ]
+      })
+    );
+    expect(result.isError).toBeUndefined();
   });
 
   it("returns NOT_FOUND when node is missing in update_workflow_node_parameter", async () => {

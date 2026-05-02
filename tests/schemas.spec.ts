@@ -5,6 +5,7 @@ import {
   getWorkflowNodeInputSchema,
   listWorkflowsInputSchema,
   updateWorkflowNodeParameterInputSchema,
+  updateWorkflowNodeParametersInputSchema,
   updateWorkflowInputSchema
 } from "../src/schemas/workflowSchemas.js";
 import {
@@ -76,5 +77,35 @@ describe("schema validation", () => {
     });
 
     expect(parsed.nodeName).toBe("HTTP Request");
+  });
+
+  it("accepts update_workflow input with nodeUpdates patch mode", () => {
+    const parsed = updateWorkflowInputSchema.parse({
+      workflowId: "wf_1",
+      nodeUpdates: [
+        {
+          nodeName: "Create GHL Contact",
+          parameters: {
+            jsonBody: "={{ { hello: 'world' } }}"
+          }
+        }
+      ]
+    });
+
+    expect(parsed.nodeUpdates?.[0]?.nodeName).toBe("Create GHL Contact");
+  });
+
+  it("accepts update_workflow_node_parameters input", () => {
+    const parsed = updateWorkflowNodeParametersInputSchema.parse({
+      workflowId: "wf_1",
+      nodeName: "Create GHL Contact",
+      parametersPatch: {
+        headerParameters: {
+          parameters: [{ name: "Content-Type", value: "application/json" }]
+        }
+      }
+    });
+
+    expect(parsed.parametersPatch).toHaveProperty("headerParameters");
   });
 });

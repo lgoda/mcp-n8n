@@ -17,6 +17,9 @@ export const workflowNodeSchema = z
 export const workflowConnectionsSchema = z.record(z.unknown());
 export const workflowSettingsSchema = z.record(z.unknown());
 export const nodeSelectorSchema = z.string().min(1);
+export const jsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
+  z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(jsonValueSchema), z.record(jsonValueSchema)])
+);
 
 export const workflowSummarySchema = z.object({
   id: z.string(),
@@ -67,6 +70,26 @@ export const updateWorkflowInputSchema = z
     workflowId: idSchema,
     name: z.string().min(1).max(128).optional(),
     nodes: z.array(workflowNodeSchema).optional(),
+    nodeUpdates: z
+      .array(
+        z
+          .object({
+            nodeNameOrId: nodeSelectorSchema.optional(),
+            nodeName: nodeSelectorSchema.optional(),
+            nodeId: nodeSelectorSchema.optional(),
+            parameters: z.record(jsonValueSchema)
+          })
+          .refine(
+            (value) =>
+              value.nodeNameOrId !== undefined || value.nodeName !== undefined || value.nodeId !== undefined,
+            {
+              message: "nodeNameOrId, nodeName or nodeId is required",
+              path: ["nodeNameOrId"]
+            }
+          )
+      )
+      .min(1)
+      .optional(),
     connections: workflowConnectionsSchema.optional(),
     settings: workflowSettingsSchema.optional(),
     allowActiveWorkflowUpdate: z.boolean().optional(),
@@ -76,6 +99,7 @@ export const updateWorkflowInputSchema = z
     (value) =>
       value.name !== undefined ||
       value.nodes !== undefined ||
+      value.nodeUpdates !== undefined ||
       value.connections !== undefined ||
       value.settings !== undefined,
     {
@@ -86,7 +110,7 @@ export const updateWorkflowInputSchema = z
 
 export const updateWorkflowOutputSchema = workflowDetailSchema;
 
-export const workflowParameterValueSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+export const workflowParameterValueSchema = jsonValueSchema;
 
 export const updateWorkflowNodeParameterInputSchema = z.object({
   workflowId: idSchema,
@@ -108,6 +132,33 @@ export const updateWorkflowNodeParameterOutputSchema = z.object({
   parameterPath: z.string(),
   value: workflowParameterValueSchema,
   updated: z.literal(true),
+  active: z.boolean(),
+  updatedAt: z.string().optional()
+});
+
+export const updateWorkflowNodeParametersInputSchema = z.object({
+  workflowId: idSchema,
+  nodeNameOrId: nodeSelectorSchema.optional(),
+  nodeName: z.string().min(1).optional(),
+  nodeId: z.string().min(1).optional(),
+  parametersPatch: z.record(jsonValueSchema),
+  allowActiveWorkflowUpdate: z.boolean().optional(),
+  deactivateBeforeUpdate: z.boolean().optional()
+}).refine(
+  (value) =>
+    value.nodeNameOrId !== undefined || value.nodeName !== undefined || value.nodeId !== undefined,
+  {
+    message: "nodeNameOrId, nodeName or nodeId is required",
+    path: ["nodeNameOrId"]
+  }
+);
+
+export const updateWorkflowNodeParametersOutputSchema = z.object({
+  workflowId: z.string(),
+  nodeId: z.string().optional(),
+  nodeName: z.string(),
+  updated: z.literal(true),
+  changedTopLevelKeys: z.array(z.string()),
   active: z.boolean(),
   updatedAt: z.string().optional()
 });

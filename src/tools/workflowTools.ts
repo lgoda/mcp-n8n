@@ -16,6 +16,8 @@ import {
   listWorkflowsOutputSchema,
   updateWorkflowNodeParameterInputSchema,
   updateWorkflowNodeParameterOutputSchema,
+  updateWorkflowNodeParametersInputSchema,
+  updateWorkflowNodeParametersOutputSchema,
   updateWorkflowInputSchema,
   updateWorkflowOutputSchema,
   validateWorkflowInputSchema,
@@ -47,6 +49,7 @@ const NODE_PARAM_UPDATE_RELATED_TOOLS = [
 
 const PARTIAL_UPDATE_RELATED_TOOLS = [
   "update_workflow_node_parameter",
+  "update_workflow_node_parameters",
   "get_workflow",
   "update_workflow"
 ];
@@ -54,11 +57,30 @@ const PARTIAL_UPDATE_RELATED_TOOLS = [
 const ACTIVE_UPDATE_RELATED_TOOLS = [
   "deactivate_workflow",
   "update_workflow",
-  "update_workflow_node_parameter"
+  "update_workflow_node_parameter",
+  "update_workflow_node_parameters"
 ];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const deepMergeJson = (
+  target: Record<string, unknown>,
+  patch: Record<string, unknown>
+): Record<string, unknown> => {
+  const result: Record<string, unknown> = structuredClone(target);
+
+  for (const [key, patchValue] of Object.entries(patch)) {
+    const currentValue = result[key];
+    if (isRecord(currentValue) && isRecord(patchValue)) {
+      result[key] = deepMergeJson(currentValue, patchValue);
+      continue;
+    }
+    result[key] = patchValue;
+  }
+
+  return result;
+};
 
 const parseParameterPath = (path: string): string[] => {
   const normalized = path.replace(/\[(\d+)\]/g, ".$1");
@@ -75,7 +97,7 @@ const parseParameterPath = (path: string): string[] => {
 const setValueAtPath = (
   root: Record<string, unknown>,
   path: string,
-  value: string | number | boolean | null
+  value: unknown
 ): void => {
   const segments = parseParameterPath(path);
   let cursor: unknown = root;
@@ -157,6 +179,12 @@ const findNodeByNameOrId = (
 
   return nodes.find((node) => node.name === nodeNameOrId);
 };
+
+const resolveNodeSelector = (input: {
+  nodeNameOrId?: string;
+  nodeName?: string;
+  nodeId?: string;
+}): string => input.nodeNameOrId ?? input.nodeId ?? input.nodeName ?? "";
 
 const enforceActiveWorkflowUpdatePolicy = async (
   workflowId: string,
@@ -419,6 +447,13 @@ export const updateWorkflowHandler = async (
       deps
     );
 
+    if (parsedInput.nodes !== undefined && parsedInput.nodeUpdates !== undefined) {
+      throw new AppError("VALIDATION_ERROR", "Cannot combine nodes and nodeUpdates in one request.", 400, {
+        errorType: "INVALID_UPDATE_COMBINATION",
+        hint: "Use either full nodes replacement or nodeUpdates patch mode, not both."
+      });
+    }
+
     if (parsedInput.nodes !== undefined) {
       const existingNodeKeys = new Set(
         existing.nodes.map((node) => (typeof node.id === "string" && node.id.length > 0 ? node.id : node.name))
@@ -443,9 +478,34 @@ export const updateWorkflowHandler = async (
       }
     }
 
+    let nodesFromNodeUpdates: WorkflowNode[] | undefined;
+    if (parsedInput.nodeUpdates !== undefined) {
+      const updatedNodes = structuredClone(existing.nodes);
+
+      for (const update of parsedInput.nodeUpdates) {
+        const selector = resolveNodeSelector(update);
+        const node = findNodeByNameOrId(updatedNodes, selector);
+
+        if (!node) {
+          throw new AppError("NOT_FOUND", "Workflow node not found", 404, {
+            errorType: "WORKFLOW_NODE_NOT_FOUND",
+            workflowId: parsedInput.workflowId,
+            nodeNameOrId: selector,
+            hint: "Use get_workflow_node or get_workflow to inspect node IDs and names.",
+            availableTools: NODE_PARAM_UPDATE_RELATED_TOOLS
+          });
+        }
+
+        const nodeParameters = isRecord(node.parameters) ? node.parameters : {};
+        node.parameters = deepMergeJson(nodeParameters, update.parameters);
+      }
+
+      nodesFromNodeUpdates = updatedNodes;
+    }
+
     const mergedPayload = mergeWorkflowUpdate(existing, {
       name: parsedInput.name,
-      nodes: parsedInput.nodes,
+      nodes: parsedInput.nodes ?? nodesFromNodeUpdates,
       connections: parsedInput.connections,
       settings: parsedInput.settings
     });
@@ -513,6 +573,67 @@ export const updateWorkflowNodeParameterHandler = async (
       parameterPath: parsedInput.parameterPath,
       value: parsedInput.value,
       updated: true,
+      active: updatedWorkflow.active,
+      updatedAt: updatedWorkflow.updatedAt
+    });
+
+    return okToolResult(payload);
+  } catch (error) {
+    return errorToolResult(error);
+  }
+};
+
+export const updateWorkflowNodeParametersHandler = async (
+  input: unknown,
+  deps: WorkflowToolsDeps
+) => {
+  try {
+    const parsedInput = updateWorkflowNodeParametersInputSchema.parse(input);
+    const existing = await deps.n8nClient.getWorkflow(parsedInput.workflowId);
+
+    await enforceActiveWorkflowUpdatePolicy(
+      parsedInput.workflowId,
+      existing.active,
+      {
+        allowActiveWorkflowUpdate: parsedInput.allowActiveWorkflowUpdate,
+        deactivateBeforeUpdate: parsedInput.deactivateBeforeUpdate
+      },
+      deps
+    );
+
+    const updatedNodes = structuredClone(existing.nodes);
+    const selector = resolveNodeSelector(parsedInput);
+    if (!selector) {
+      throw new AppError("VALIDATION_ERROR", "nodeNameOrId is required", 400);
+    }
+
+    const node = findNodeByNameOrId(updatedNodes, selector);
+    if (!node) {
+      throw new AppError("NOT_FOUND", "Workflow node not found", 404, {
+        errorType: "WORKFLOW_NODE_NOT_FOUND",
+        workflowId: parsedInput.workflowId,
+        nodeNameOrId: selector,
+        hint: "Use get_workflow_node or get_workflow to inspect node IDs and names.",
+        availableTools: NODE_PARAM_UPDATE_RELATED_TOOLS
+      });
+    }
+
+    const baseParameters = isRecord(node.parameters) ? node.parameters : {};
+    node.parameters = deepMergeJson(baseParameters, parsedInput.parametersPatch);
+
+    const updatedWorkflow = await deps.n8nClient.updateWorkflow(parsedInput.workflowId, {
+      name: existing.name,
+      nodes: updatedNodes,
+      connections: existing.connections,
+      settings: existing.settings
+    });
+
+    const payload = updateWorkflowNodeParametersOutputSchema.parse({
+      workflowId: parsedInput.workflowId,
+      nodeId: node.id,
+      nodeName: node.name,
+      updated: true,
+      changedTopLevelKeys: Object.keys(parsedInput.parametersPatch),
       active: updatedWorkflow.active,
       updatedAt: updatedWorkflow.updatedAt
     });
@@ -642,7 +763,7 @@ export const registerWorkflowTools = (
       {
         title: "Update Workflow",
         description:
-          "Safely update top-level workflow fields using controlled merge. Rules: if 'nodes' is provided, it must contain all nodes (no partial replacement). For partial edits use update_workflow_node_parameter. If workflow is active, set allowActiveWorkflowUpdate=true or deactivateBeforeUpdate=true.",
+          "Safely update top-level workflow fields using controlled merge. You can use either full 'nodes' replacement (must include all nodes) or 'nodeUpdates' patch mode for targeted node parameter merges. For single-path edits use update_workflow_node_parameter. If workflow is active, set allowActiveWorkflowUpdate=true or deactivateBeforeUpdate=true.",
         inputSchema: updateWorkflowInputSchema
       },
       async (input) => updateWorkflowHandler(input, deps)
@@ -657,6 +778,17 @@ export const registerWorkflowTools = (
         inputSchema: updateWorkflowNodeParameterInputSchema
       },
       async (input) => updateWorkflowNodeParameterHandler(input, deps)
+    );
+
+    server.registerTool(
+      "update_workflow_node_parameters",
+      {
+        title: "Update Workflow Node Parameters",
+        description:
+          "Patch-merge multiple parameters on one node by node ID or name. Preferred when you need to update nested objects like headerParameters/jsonBody in one call.",
+        inputSchema: updateWorkflowNodeParametersInputSchema
+      },
+      async (input) => updateWorkflowNodeParametersHandler(input, deps)
     );
 
     server.registerTool(
