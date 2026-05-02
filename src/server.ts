@@ -53,6 +53,19 @@ export const createApp = (options?: CreateAppOptions): Express => {
 
   app.all("/mcp", async (req: Request, res: Response) => {
     const startedAt = Date.now();
+    const mcpSessionId = req.header("mcp-session-id") ?? null;
+    const mcpProtocolVersion = req.header("mcp-protocol-version") ?? null;
+    const acceptHeader = req.header("accept") ?? null;
+    const contentTypeHeader = req.header("content-type") ?? null;
+
+    logger.debug("MCP request received", {
+      method: req.method,
+      mcpSessionId,
+      mcpProtocolVersion,
+      accept: acceptHeader,
+      contentType: contentTypeHeader
+    });
+
     const mcpServer = buildMcpServer(serverConfig, options?.enableWriteTools ?? true);
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
@@ -66,6 +79,8 @@ export const createApp = (options?: CreateAppOptions): Express => {
       const publicError = toPublicError(error);
       logger.error("MCP request failed", {
         method: req.method,
+        mcpSessionId,
+        mcpProtocolVersion,
         code: publicError.code,
         statusCode: publicError.statusCode,
         message: publicError.message
@@ -87,7 +102,8 @@ export const createApp = (options?: CreateAppOptions): Express => {
       logger.debug("MCP request completed", {
         method: req.method,
         durationMs: Date.now() - startedAt,
-        responseHeadersSent: res.headersSent
+        responseHeadersSent: res.headersSent,
+        responseStatusCode: res.statusCode
       });
     }
   });
