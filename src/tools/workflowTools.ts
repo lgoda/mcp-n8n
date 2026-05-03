@@ -465,7 +465,17 @@ export const updateWorkflowHandler = async (
       const incomingNodeKeys = new Set(
         parsedInput.nodes.map((node) => (typeof node.id === "string" && node.id.length > 0 ? node.id : node.name))
       );
+      const incomingNodeNames = new Set(parsedInput.nodes.map((node) => node.name));
       const missingNodeKeys = Array.from(existingNodeKeys).filter((key) => !incomingNodeKeys.has(key));
+      const missingExistingNodesWithId = existing.nodes
+        .filter((node) => typeof node.id === "string" && node.id.length > 0 && !incomingNodeKeys.has(node.id))
+        .map((node) => ({
+          id: node.id as string,
+          name: node.name
+        }));
+      const possibleIdNameMismatches = missingExistingNodesWithId
+        .filter((node) => incomingNodeNames.has(node.name))
+        .slice(0, 20);
 
       if (missingNodeKeys.length > 0) {
         throw new AppError(
@@ -474,9 +484,15 @@ export const updateWorkflowHandler = async (
           400,
           {
             errorType: "PARTIAL_NODE_UPDATE_NOT_ALLOWED",
-            hint: "Use update_workflow_node_parameter for incremental edits, or send the full nodes array.",
+            hint:
+              possibleIdNameMismatches.length > 0
+                ? "Detected node name matches without matching node IDs. For full nodes replacement, preserve original node.id values for all existing nodes; otherwise use incremental node update tools."
+                : "Use update_workflow_node_parameter for incremental edits, or send the full nodes array.",
             availableTools: PARTIAL_UPDATE_RELATED_TOOLS,
-            missingNodes: missingNodeKeys.slice(0, 20)
+            existingNodeCount: existing.nodes.length,
+            incomingNodeCount: parsedInput.nodes.length,
+            missingNodes: missingNodeKeys.slice(0, 20),
+            possibleIdNameMismatches
           }
         );
       }
@@ -771,7 +787,7 @@ export const registerWorkflowTools = (
       {
         title: "Update Workflow",
         description:
-          "Safely update workflow with controlled merge. Modes: (1) full nodes replacement with 'nodes' (must include ALL nodes), or (2) targeted patch mode with 'nodeUpdates[].parameters'. IMPORTANT: 'nodeUpdates[].parameterUpdates' is NOT supported. Use update_workflow_node_parameter for single path edits. Active workflow requires allowActiveWorkflowUpdate=true or deactivateBeforeUpdate=true. Example nodeUpdates: {\"workflowId\":\"wf_1\",\"nodeUpdates\":[{\"nodeName\":\"Wait 150ms\",\"parameters\":{\"amount\":150,\"unit\":\"milliseconds\"}}]}",
+          "Safely update workflow with controlled merge. Modes: (1) full nodes replacement with 'nodes' (must include ALL nodes and preserve existing node.id values), or (2) targeted patch mode with 'nodeUpdates[].parameters'. IMPORTANT: 'nodeUpdates[].parameterUpdates' is NOT supported. Use update_workflow_node_parameter for single path edits. Active workflow requires allowActiveWorkflowUpdate=true or deactivateBeforeUpdate=true. Example nodeUpdates: {\"workflowId\":\"wf_1\",\"nodeUpdates\":[{\"nodeName\":\"Wait 150ms\",\"parameters\":{\"amount\":150,\"unit\":\"milliseconds\"}}]}",
         inputSchema: updateWorkflowInputSchema
       },
       async (input) => updateWorkflowHandler(input, deps)
