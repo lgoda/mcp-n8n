@@ -16,6 +16,10 @@ interface ExecutionToolsDeps {
   n8nClient: Pick<N8nClient, "listExecutions" | "getExecution">;
 }
 
+const READ_ONLY_ANNOTATIONS = {
+  readOnlyHint: true
+} as const;
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -161,7 +165,8 @@ export const registerExecutionTools = (server: McpServer, deps: ExecutionToolsDe
     {
       title: "List Executions",
       description: "List n8n executions with optional workflow, status and limit filters.",
-      inputSchema: listExecutionsInputSchema
+      inputSchema: listExecutionsInputSchema,
+      annotations: READ_ONLY_ANNOTATIONS
     },
     async (input) => listExecutionsHandler(input, deps)
   );
@@ -171,7 +176,8 @@ export const registerExecutionTools = (server: McpServer, deps: ExecutionToolsDe
     {
       title: "Get Execution",
       description: "Get a specific n8n execution by ID with cleaned output fields.",
-      inputSchema: getExecutionInputSchema
+      inputSchema: getExecutionInputSchema,
+      annotations: READ_ONLY_ANNOTATIONS
     },
     async (input) => getExecutionHandler(input, deps)
   );
@@ -182,7 +188,8 @@ export const registerExecutionTools = (server: McpServer, deps: ExecutionToolsDe
       title: "Get Execution Node Data",
       description:
         "Get node-level execution data for one node in one execution (runs, input/output, and node errors). Use this for debugging partial failures when workflow status is success.",
-      inputSchema: getExecutionNodeDataInputSchema
+      inputSchema: getExecutionNodeDataInputSchema,
+      annotations: READ_ONLY_ANNOTATIONS
     },
     async (input) => getExecutionNodeDataHandler(input, deps)
   );

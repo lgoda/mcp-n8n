@@ -41,6 +41,10 @@ interface WorkflowToolsDeps {
   >;
 }
 
+const READ_ONLY_ANNOTATIONS = {
+  readOnlyHint: true
+} as const;
+
 const NODE_PARAM_UPDATE_RELATED_TOOLS = [
   "update_workflow_node_parameter",
   "get_workflow_node",
@@ -698,7 +702,8 @@ export const registerWorkflowTools = (
     {
       title: "List Workflows",
       description: "List n8n workflows with optional pagination and active-state filter.",
-      inputSchema: listWorkflowsInputSchema
+      inputSchema: listWorkflowsInputSchema,
+      annotations: READ_ONLY_ANNOTATIONS
     },
     async (input) => listWorkflowsHandler(input, deps)
   );
@@ -709,7 +714,8 @@ export const registerWorkflowTools = (
       title: "Get Workflow",
       description:
         "Get one n8n workflow by ID with cleaned fields. Use this before update operations when node details are needed.",
-      inputSchema: getWorkflowInputSchema
+      inputSchema: getWorkflowInputSchema,
+      annotations: READ_ONLY_ANNOTATIONS
     },
     async (input) => getWorkflowHandler(input, deps)
   );
@@ -720,7 +726,8 @@ export const registerWorkflowTools = (
       title: "Get Workflow Node",
       description:
         "Get one node from a workflow by node ID or node name. Useful for inspecting a single HTTP/Code/Wait node without loading full workflow context.",
-      inputSchema: getWorkflowNodeInputSchema
+      inputSchema: getWorkflowNodeInputSchema,
+      annotations: READ_ONLY_ANNOTATIONS
     },
     async (input) => getWorkflowNodeHandler(input, deps)
   );
@@ -731,7 +738,8 @@ export const registerWorkflowTools = (
       title: "Validate Workflow",
       description:
         "Validate workflow definition before saving. Returns errors and warnings (duplicate names, disconnected graph hints, expression/HTTP body risks, schedule trigger caution).",
-      inputSchema: validateWorkflowInputSchema
+      inputSchema: validateWorkflowInputSchema,
+      annotations: READ_ONLY_ANNOTATIONS
     },
     async (input) => validateWorkflowHandler(input)
   );
