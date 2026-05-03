@@ -29,7 +29,7 @@ export const listExecutionsInputSchema = z.object({
   workflowId: idSchema.optional(),
   limit: paginationLimitSchema.optional(),
   status: executionStatusSchema.optional()
-});
+}).strict();
 
 export const listExecutionsOutputSchema = z.object({
   data: z.array(executionSummarySchema),
@@ -38,14 +38,14 @@ export const listExecutionsOutputSchema = z.object({
 
 export const getExecutionInputSchema = z.object({
   executionId: idSchema
-});
+}).strict();
 
 export const getExecutionOutputSchema = executionDetailSchema;
 
 export const getExecutionNodeDataInputSchema = z.object({
   executionId: idSchema,
   nodeName: z.string().min(1)
-});
+}).strict();
 
 export const executionNodeRunSchema = z.object({
   runIndex: z.number().int().nonnegative(),

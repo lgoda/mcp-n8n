@@ -38,7 +38,7 @@ export const listWorkflowsInputSchema = z.object({
   limit: paginationLimitSchema.optional(),
   cursor: z.string().min(1).optional(),
   active: z.boolean().optional()
-});
+}).strict();
 
 export const listWorkflowsOutputSchema = z.object({
   data: z.array(workflowSummarySchema),
@@ -47,7 +47,7 @@ export const listWorkflowsOutputSchema = z.object({
 
 export const getWorkflowInputSchema = z.object({
   workflowId: idSchema
-});
+}).strict();
 
 export const getWorkflowOutputSchema = workflowDetailSchema;
 
@@ -56,7 +56,7 @@ export const createWorkflowInputSchema = z.object({
   nodes: z.array(workflowNodeSchema),
   connections: workflowConnectionsSchema,
   settings: workflowSettingsSchema.optional()
-});
+}).strict();
 
 export const createWorkflowOutputSchema = z.object({
   id: z.string(),
@@ -79,6 +79,7 @@ export const updateWorkflowInputSchema = z
             nodeId: nodeSelectorSchema.optional(),
             parameters: z.record(jsonValueSchema)
           })
+          .strict()
           .refine(
             (value) =>
               value.nodeNameOrId !== undefined || value.nodeName !== undefined || value.nodeId !== undefined,
@@ -98,6 +99,7 @@ export const updateWorkflowInputSchema = z
     allowActiveWorkflowUpdate: z.boolean().optional(),
     deactivateBeforeUpdate: z.boolean().optional()
   })
+  .strict()
   .refine(
     (value) =>
       value.name !== undefined ||
@@ -123,7 +125,7 @@ export const updateWorkflowNodeParameterInputSchema = z.object({
   value: workflowParameterValueSchema,
   allowActiveWorkflowUpdate: z.boolean().optional(),
   deactivateBeforeUpdate: z.boolean().optional()
-}).refine((value) => value.nodeNameOrId !== undefined || value.nodeName !== undefined, {
+}).strict().refine((value) => value.nodeNameOrId !== undefined || value.nodeName !== undefined, {
   message: "nodeNameOrId is required",
   path: ["nodeNameOrId"]
 });
@@ -149,7 +151,7 @@ export const updateWorkflowNodeParametersInputSchema = z.object({
     .describe("Deep patch object merged into node.parameters. Arrays are replaced by provided values."),
   allowActiveWorkflowUpdate: z.boolean().optional(),
   deactivateBeforeUpdate: z.boolean().optional()
-}).refine(
+}).strict().refine(
   (value) =>
     value.nodeNameOrId !== undefined || value.nodeName !== undefined || value.nodeId !== undefined,
   {
@@ -171,7 +173,7 @@ export const updateWorkflowNodeParametersOutputSchema = z.object({
 export const getWorkflowNodeInputSchema = z.object({
   workflowId: idSchema,
   nodeNameOrId: nodeSelectorSchema
-});
+}).strict();
 
 export const getWorkflowNodeOutputSchema = z.object({
   workflowId: z.string(),
@@ -184,7 +186,7 @@ export const cloneWorkflowInputSchema = z.object({
   sourceWorkflowId: idSchema,
   newName: z.string().min(1).max(128),
   active: z.boolean().optional()
-});
+}).strict();
 
 export const cloneWorkflowOutputSchema = z.object({
   sourceWorkflowId: z.string(),
@@ -199,7 +201,7 @@ export const validateWorkflowInputSchema = z.object({
   nodes: z.array(workflowNodeSchema),
   connections: workflowConnectionsSchema,
   settings: workflowSettingsSchema.optional()
-});
+}).strict();
 
 export const validateWorkflowOutputSchema = z.object({
   valid: z.boolean(),
@@ -209,11 +211,11 @@ export const validateWorkflowOutputSchema = z.object({
 
 export const activateWorkflowInputSchema = z.object({
   workflowId: idSchema
-});
+}).strict();
 
 export const deactivateWorkflowInputSchema = z.object({
   workflowId: idSchema
-});
+}).strict();
 
 export const activationOutputSchema = z.object({
   id: z.string(),
